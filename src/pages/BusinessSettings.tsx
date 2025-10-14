@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Business, Service, StaffMember, BusinessHours } from '../types';
 import { businessApi, servicesApi, staffApi } from '../services/api';
-import { mockBusiness } from '../services/mockData';
+import { useAuth } from '../contexts/AuthContext';
 
 type TabType = 'general' | 'services' | 'staff' | 'hours';
 
 export const BusinessSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('general');
-  const [business, setBusiness] = useState<Business>(mockBusiness);
-  const [services, setServices] = useState<Service[]>(mockBusiness.services);
-  const [staff, setStaff] = useState<StaffMember[]>(mockBusiness.staff);
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadData();
@@ -21,22 +24,33 @@ export const BusinessSettings: React.FC = () => {
 
   const loadData = async () => {
     try {
+      setIsLoading(true);
       const [businessData, servicesData, staffData] = await Promise.all([
-        businessApi.getBusiness(mockBusiness.id),
-        servicesApi.getServices(mockBusiness.id),
-        staffApi.getStaff(mockBusiness.id),
+        businessApi.getBusiness(),
+        servicesApi.getServices(),
+        staffApi.getStaff(),
       ]);
       setBusiness(businessData);
       setServices(servicesData);
       setStaff(staffData);
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSaveGeneral = async () => {
+    if (!business) return;
+
     try {
-      await businessApi.updateBusiness(business.id, business);
+      await businessApi.updateBusiness(business);
+
+      // Save business hours if needed
+      if (business.hours) {
+        await businessApi.updateBusinessHours(business.hours);
+      }
+
       setIsEditing(false);
       alert('Business information updated successfully!');
     } catch (error) {
@@ -50,7 +64,8 @@ export const BusinessSettings: React.FC = () => {
 
     try {
       if (editingService.id.startsWith('new-')) {
-        const newService = await servicesApi.createService(business.id, editingService);
+        const { id, ...serviceData } = editingService;
+        const newService = await servicesApi.createService(serviceData as any);
         setServices([...services, newService]);
       } else {
         const updated = await servicesApi.updateService(editingService.id, editingService);
@@ -82,7 +97,8 @@ export const BusinessSettings: React.FC = () => {
 
     try {
       if (editingStaff.id.startsWith('new-')) {
-        const newStaff = await staffApi.createStaffMember(business.id, editingStaff);
+        const { id, ...staffData } = editingStaff;
+        const newStaff = await staffApi.createStaffMember(staffData as any);
         setStaff([...staff, newStaff]);
       } else {
         const updated = await staffApi.updateStaffMember(editingStaff.id, editingStaff);
@@ -114,6 +130,19 @@ export const BusinessSettings: React.FC = () => {
     return days[dayOfWeek];
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (isLoading || !business) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -126,6 +155,12 @@ export const BusinessSettings: React.FC = () => {
             <span className="text-gray-400">|</span>
             <h1 className="text-xl font-semibold text-gray-900">Business Settings</h1>
           </div>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          >
+            Logout
+          </button>
         </div>
       </nav>
 

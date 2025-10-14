@@ -1,17 +1,57 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { BusinessDashboard } from './pages/BusinessDashboard';
 import { ClientBooking } from './pages/ClientBooking';
 import { BusinessSettings } from './pages/BusinessSettings';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+
+// Protected Route wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { token, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/business" element={<BusinessDashboard />} />
-        <Route path="/business/settings" element={<BusinessSettings />} />
-        <Route path="/book" element={<ClientBooking />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/business"
+            element={
+              <ProtectedRoute>
+                <BusinessDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/business/settings"
+            element={
+              <ProtectedRoute>
+                <BusinessSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/book" element={<ClientBooking />} />
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }

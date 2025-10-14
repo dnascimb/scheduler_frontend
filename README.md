@@ -1,6 +1,6 @@
 # Appointment Scheduler - Google Calendar Style
 
-A modern, Google Calendar-inspired appointment booking system built for small businesses. This application provides both a business dashboard for managing appointments and a client-facing booking interface.
+A modern, full-stack appointment booking system built for small businesses with Google Calendar-inspired design. Complete with React frontend, Express backend, PostgreSQL database, and JWT authentication.
 
 Perfect for salons, spas, medical practices, consulting firms, and any service-based business that needs appointment scheduling.
 
@@ -8,7 +8,8 @@ Perfect for salons, spas, medical practices, consulting firms, and any service-b
 
 ### Business Dashboard (`/business`)
 - **📅 Calendar Views**: Month, Week, and Day views with Google Calendar styling
-- **✏️ Appointment Management**: View, edit, cancel, and manage all appointments
+- **🔐 Authentication**: Secure login with JWT tokens
+- **✏️ Appointment Management**: View, edit, cancel, and manage all appointments in real-time
 - **🔧 Settings Dashboard**: Comprehensive business configuration
   - General business information
   - Service management (add, edit, delete services)
@@ -16,7 +17,7 @@ Perfect for salons, spas, medical practices, consulting firms, and any service-b
   - Business hours configuration
 - **👥 Staff Availability**: Each staff member can have unique working hours by day of week
 - **🎨 Color Coding**: Visual service and staff identification with custom colors
-- **⚡ Real-time Updates**: Mock API with realistic delays
+- **💾 Real Database**: All data persists to PostgreSQL
 
 ### Client Booking Interface (`/book`)
 - **📝 Multi-step Booking Flow**:
@@ -28,167 +29,352 @@ Perfect for salons, spas, medical practices, consulting firms, and any service-b
 - **✅ Smart Scheduling**: Only shows available slots when staff members are working
 - **📱 Responsive Design**: Works on desktop, tablet, and mobile
 - **💬 Booking Confirmation**: Clear confirmation screen with appointment details
+- **🔄 Automatic Client Creation**: New clients are automatically created or existing clients are found
 
 ## Tech Stack
 
+### Frontend
 - **React 18** with TypeScript
 - **Vite** for fast development and building
 - **Tailwind CSS** for styling
-- **React Router** for navigation
-- **Mock API** with realistic data and delays
+- **React Router v7** for navigation
+- **JWT Authentication** with localStorage persistence
+
+### Backend
+- **Node.js** with Express
+- **TypeScript** for type safety
+- **PostgreSQL** database
+- **Prisma ORM** for database operations
+- **JWT** for authentication
+- **bcryptjs** for password hashing
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 16+ and npm
+- Node.js 18+ and npm
+- PostgreSQL database (or use Prisma dev database)
 
 ### Installation
 
-1. Navigate to the project directory:
+**1. Clone and Navigate:**
 ```bash
 cd appointment-scheduler
 ```
 
-2. Install dependencies:
+**2. Install Frontend Dependencies:**
 ```bash
 npm install
 ```
 
-3. Start the development server:
+**3. Install Backend Dependencies:**
 ```bash
-npm run dev
+cd ../backend
+npm install
 ```
 
-4. Open your browser and navigate to:
+**4. Set Up Database:**
+```bash
+# Start Prisma development database
+npx prisma dev
+
+# In another terminal, run migrations
+npx prisma migrate dev
+
+# Seed the database with sample data
+npm run prisma:seed
 ```
-http://localhost:5174
+
+**5. Configure Environment Variables:**
+```bash
+# Backend .env file is already configured
+# Update if needed: DATABASE_URL, JWT_SECRET, PORT, etc.
 ```
+
+**6. Start Backend Server:**
+```bash
+npm run dev
+# Backend runs on http://localhost:3001
+```
+
+**7. Start Frontend Server:**
+```bash
+cd ../appointment-scheduler
+npm run dev
+# Frontend runs on http://localhost:5174
+```
+
+### Demo Credentials
+
+After seeding the database, you can log in with:
+- **Email**: `owner@sunnyspasalon.com`
+- **Password**: `demo123`
 
 ## Project Structure
 
+### Frontend (`/appointment-scheduler`)
 ```
 src/
 ├── components/
-│   ├── calendar/         # Calendar components (Month, Week, Day views)
-│   │   ├── Calendar.tsx  # Main calendar component
-│   │   ├── MonthView.tsx
-│   │   ├── WeekView.tsx
-│   │   └── DayView.tsx
-│   ├── business/         # Business-specific components
-│   ├── client/           # Client-specific components
-│   └── shared/           # Shared components
+│   └── calendar/              # Calendar components
+│       ├── Calendar.tsx       # Main calendar with view switching
+│       ├── MonthView.tsx      # Month grid view
+│       ├── WeekView.tsx       # Week timeline view
+│       └── DayView.tsx        # Single day detailed view
+├── contexts/
+│   └── AuthContext.tsx        # Authentication state management
 ├── pages/
+│   ├── Login.tsx              # Login page
+│   ├── Register.tsx           # Registration page
 │   ├── BusinessDashboard.tsx  # Business calendar/dashboard
+│   ├── BusinessSettings.tsx   # Settings management
 │   └── ClientBooking.tsx      # Client booking flow
 ├── services/
-│   ├── api.ts           # Mock API service layer
-│   └── mockData.ts      # Sample business data
+│   └── api.ts                 # API service layer
+├── config/
+│   └── api.ts                 # API configuration
 ├── types/
-│   └── index.ts         # TypeScript type definitions
+│   └── index.ts               # TypeScript type definitions
 ├── utils/
-│   └── dateUtils.ts     # Date manipulation utilities
-├── App.tsx              # Main app with routing
-└── main.tsx             # App entry point
+│   └── dateUtils.ts           # Date manipulation utilities
+└── App.tsx                    # Main app with routing
+```
+
+### Backend (`/backend`)
+```
+src/
+├── controllers/               # Request handlers
+│   ├── authController.ts      # Login, register, get user
+│   ├── businessController.ts  # Business CRUD
+│   ├── servicesController.ts  # Services CRUD
+│   ├── staffController.ts     # Staff CRUD
+│   ├── appointmentsController.ts  # Appointments + availability
+│   └── clientsController.ts   # Clients CRUD
+├── routes/                    # Route definitions
+│   ├── auth.ts
+│   ├── business.ts
+│   ├── services.ts
+│   ├── staff.ts
+│   ├── appointments.ts
+│   └── clients.ts
+├── middleware/
+│   └── auth.ts                # JWT authentication middleware
+├── utils/                     # Utility functions
+└── index.ts                   # Express app setup
+
+prisma/
+├── schema.prisma              # Database schema
+├── migrations/                # Database migrations
+└── seed.ts                    # Sample data seeding
 ```
 
 ## 🚀 Usage Guide
 
-### Business Dashboard (`/business`)
+### Business Dashboard
 
-**Managing Appointments:**
-- View appointments in Month, Week, or Day view
-- Click on any appointment to view details
-- Edit appointment details (service, staff, date, time, status, notes)
-- Cancel appointments
-- Navigate through dates using the calendar controls
+**1. Login:**
+- Navigate to http://localhost:5174
+- Click "Business Dashboard" (redirects to login)
+- Use demo credentials or register a new account
 
-**Accessing Settings:**
-1. Click "Settings" in the top navigation
-2. Configure your business:
-   - **General**: Business name, contact info, address
-   - **Services**: Add/edit services with duration, price, and color
-   - **Staff**: Add staff members with individual availability schedules
-   - **Hours**: Set business operating hours for each day
+**2. View Appointments:**
+- Calendar automatically loads with appointments from database
+- Switch between Month, Week, and Day views
+- Click any appointment to view details
 
-**Staff Availability Management:**
-- Each staff member can have different working hours
-- Set availability by day of week (e.g., Mon-Fri 9AM-5PM, Sat 10AM-2PM)
-- Add multiple time blocks per staff member
-- Clients can only book during staff working hours
+**3. Edit Appointments:**
+- Click on an appointment
+- Click "Edit" button
+- Modify service, staff, time, status, or notes
+- Save - changes persist to database
 
-### Client Booking (`/book`)
-1. **Select Service**: Choose from available services with prices and durations
-2. **Pick Date & Time**:
-   - Select a date from the next 14 days
-   - View available time slots organized by staff member
-   - Slots automatically respect staff availability and existing bookings
-3. **Enter Information**: Provide name, email, phone, and optional notes
-4. **Confirm**: Review all details and confirm your appointment
+**4. Manage Settings:**
+- Click "Settings" in top navigation
+- **General Tab**: Update business information
+- **Services Tab**: Add, edit, or delete services
+- **Staff Tab**: Manage staff members and their availability schedules
+- **Hours Tab**: Set business operating hours
 
-## Mock Data
+### Client Booking Flow
 
-The application includes realistic mock data:
-- **Business**: Sunny Spa & Wellness
-- **Services**: 5 different services (massages, facials, nail care)
-- **Staff**: 3 staff members with different schedules
-- **Appointments**: Auto-generated appointments for the past week and next 30 days
+1. **Navigate to**: http://localhost:5174/book (while logged in)
+2. **Select Service**: Choose from available services
+3. **Pick Date & Time**:
+   - Select a date
+   - API fetches available slots based on staff availability
+   - Choose a time slot
+4. **Enter Information**: Provide contact details
+5. **Confirm**: Review and confirm booking
+6. **Success**: Appointment created in database
 
-## Customization
+## API Endpoints
 
-### Adding New Services
-Edit `src/services/mockData.ts` to add services to the `mockBusiness.services` array.
+### Authentication
+- `POST /api/auth/register` - Register new user and business
+- `POST /api/auth/login` - Login and get JWT token
+- `GET /api/auth/me` - Get current user (requires auth)
 
-### Modifying Business Hours
-Update the `mockBusiness.hours` array in `src/services/mockData.ts`.
+### Business
+- `GET /api/business` - Get business details (requires auth)
+- `PUT /api/business` - Update business (requires auth)
+- `PUT /api/business/hours` - Update business hours (requires auth)
 
-### Changing Colors
-The app uses Google's color palette, defined in `tailwind.config.js`. Modify the `colors.google` section to change the color scheme.
+### Services
+- `GET /api/services` - List services (requires auth)
+- `POST /api/services` - Create service (requires auth)
+- `PUT /api/services/:id` - Update service (requires auth)
+- `DELETE /api/services/:id` - Delete service (requires auth)
 
-## Backend Integration
+### Staff
+- `GET /api/staff` - List staff members (requires auth)
+- `POST /api/staff` - Create staff member (requires auth)
+- `PUT /api/staff/:id` - Update staff member (requires auth)
+- `DELETE /api/staff/:id` - Delete staff member (requires auth)
 
-This is a frontend-only implementation with a mock API. To connect to a real backend:
+### Appointments
+- `GET /api/appointments` - List appointments (requires auth)
+- `GET /api/appointments/available-slots` - Get available time slots (requires auth)
+- `POST /api/appointments` - Create appointment (requires auth)
+- `PUT /api/appointments/:id` - Update appointment (requires auth)
+- `DELETE /api/appointments/:id` - Cancel appointment (requires auth)
 
-1. Replace the functions in `src/services/api.ts` with actual API calls
-2. Update the API endpoints to match your backend
-3. Remove the mock delay functions
-4. Handle authentication and authorization as needed
+### Clients
+- `GET /api/clients` - List clients (requires auth)
+- `POST /api/clients` - Create client (requires auth)
+- `PUT /api/clients/:id` - Update client (requires auth)
+- `DELETE /api/clients/:id` - Delete client (requires auth)
 
-## 🎯 Key Use Cases
+## Database Schema
 
-This scheduler is ideal for:
-- **Salons & Spas**: Different stylists/therapists with varying schedules
-- **Medical Practices**: Multiple doctors/practitioners with different specialties
-- **Consulting**: Individual consultants with unique availability
-- **Fitness Studios**: Personal trainers with different time slots
-- **Service Businesses**: Any business requiring staff-specific appointment booking
+The PostgreSQL database includes:
+- **Users**: Business owners with authentication
+- **Businesses**: Business information and settings
+- **BusinessHours**: Operating hours per day of week
+- **Services**: Bookable services with pricing
+- **StaffMembers**: Staff with individual availability
+- **StaffAvailability**: Working hours per staff member
+- **Clients**: Customers who book appointments
+- **Appointments**: Bookings with full relationships
+- **AppointmentStatus**: Enum (PENDING, CONFIRMED, CANCELLED, COMPLETED, NO_SHOW)
+
+See `backend/prisma/schema.prisma` for complete schema.
+
+## 🎯 Key Features
+
+### Smart Availability System
+- Staff members have individual availability schedules
+- Appointment slots only show when staff are working
+- Real-time conflict detection prevents double-booking
+- Buffer time between appointments
+- Configurable slot duration
+
+### Authentication & Security
+- Secure JWT-based authentication
+- Password hashing with bcryptjs
+- Protected API routes
+- Token persistence in localStorage
+- Automatic token refresh on page reload
+
+### Real-time Updates
+- All changes immediately reflected in UI
+- Database persistence for all operations
+- Soft deletes for services and staff (mark as inactive)
+- Complete audit trail with created/updated timestamps
+
+## Development
+
+### Frontend Development
+```bash
+cd appointment-scheduler
+npm run dev
+```
+
+### Backend Development
+```bash
+cd backend
+npm run dev
+```
+
+### Database Management
+```bash
+# Open Prisma Studio (visual database editor)
+npm run prisma:studio
+
+# Create a new migration
+npm run prisma:migrate
+
+# Reset database and reseed
+npx prisma migrate reset
+npm run prisma:seed
+```
+
+## Building for Production
+
+### Frontend
+```bash
+cd appointment-scheduler
+npm run build
+# Deploy dist/ folder to Vercel, Netlify, etc.
+```
+
+### Backend
+```bash
+cd backend
+npm run build
+# Deploy to Heroku, Railway, Render, etc.
+```
+
+### Environment Variables for Production
+
+**Backend:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `JWT_SECRET` - Strong random secret for JWT signing
+- `PORT` - Server port (default 3001)
+- `NODE_ENV` - Set to "production"
+- `FRONTEND_URL` - Your frontend domain for CORS
+
+**Frontend:**
+- `VITE_API_URL` - Your backend API URL (update in `src/config/api.ts`)
 
 ## 🔮 Future Enhancements
 
 Potential features to add:
 - Email/SMS notifications for appointments
-- Calendar export (iCal format)
-- Multi-business/multi-location support
 - Payment integration (Stripe, Square)
 - Recurring appointments
-- Client history and notes
-- Staff performance analytics and reports
+- Multi-business/multi-location support
+- Calendar export (iCal format)
+- Client portal with appointment history
+- Staff performance analytics
 - Waitlist management
-- Online payment processing
-- Custom appointment types and pricing
-- Automated reminders
+- Automated reminder system
 - Review and rating system
+- Mobile app (React Native)
+- Google Calendar integration
 
-## Building for Production
+## Troubleshooting
 
-```bash
-npm run build
-```
+### Database Connection Issues
+- Ensure Prisma dev server is running: `npx prisma dev`
+- Check `DATABASE_URL` in `.env`
 
-The built files will be in the `dist` directory, ready to deploy to any static hosting service.
+### Authentication Issues
+- Verify `JWT_SECRET` is set in backend `.env`
+- Check token in browser localStorage
+- Token expires after 7 days
+
+### CORS Issues
+- Ensure `FRONTEND_URL` in backend `.env` matches your frontend URL
+- Update CORS configuration in `backend/src/index.ts`
 
 ## License
 
 MIT
+
+## Documentation
+
+- [Backend API Documentation](../backend/README.md)
+- [Claude Code Session Notes](./CLAUDE.md)
+- [Prisma Schema](../backend/prisma/schema.prisma)
 
 ## Support
 

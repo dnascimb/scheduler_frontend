@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Service, StaffMember, TimeSlot } from '../types';
-import { servicesApi, staffApi, appointmentsApi, clientsApi } from '../services/api';
-import { mockBusiness } from '../services/mockData';
+import { Service, StaffMember } from '../types';
+import { API_BASE_URL } from '../config/api';
 import { formatDate, formatTime } from '../utils/dateUtils';
+
+// Interfaces for time slots
+interface AvailableSlot {
+  time: string;
+  staffId: string;
+}
 
 export const ClientBooking: React.FC = () => {
   const [step, setStep] = useState<'service' | 'datetime' | 'info' | 'confirm'>('service');
@@ -10,8 +15,9 @@ export const ClientBooking: React.FC = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [clientInfo, setClientInfo] = useState({
     name: '',
     email: '',
@@ -20,39 +26,93 @@ export const ClientBooking: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isBookingComplete, setIsBookingComplete] = useState(false);
+  const [businessName, setBusinessName] = useState('');
 
   useEffect(() => {
-    loadServices();
-    loadStaff();
+    loadInitialData();
   }, []);
 
-  const loadServices = async () => {
+  const loadInitialData = async () => {
     try {
-      const data = await servicesApi.getServices(mockBusiness.id);
-      setServices(data.filter(s => s.isActive));
-    } catch (error) {
-      console.error('Error loading services:', error);
-    }
-  };
+      // For now, we'll use a direct fetch since this is a public page
+      // In production, you might pass a business ID as a URL parameter
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // Redirect to login or show message
+        console.log('No authentication - this would be a public booking page with business ID in URL');
+        return;
+      }
 
-  const loadStaff = async () => {
-    try {
-      const data = await staffApi.getStaff(mockBusiness.id);
-      setStaff(data.filter(s => s.isActive));
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+
+      const [servicesRes, staffRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/services`, { headers }),
+        fetch(`${API_BASE_URL}/staff`, { headers })
+      ]);
+
+      if (servicesRes.ok && staffRes.ok) {
+        const servicesData = await servicesRes.json();
+        const staffData = await staffRes.json();
+
+        setServices(servicesData.filter((s: Service) => s.isActive));
+        setStaff(staffData.filter((s: StaffMember) => s.isActive));
+
+        // Get business info
+        const businessRes = await fetch(`${API_BASE_URL}/business`, { headers });
+        if (businessRes.ok) {
+          const businessData = await businessRes.json();
+          setBusinessName(businessData.name);
+        }
+      }
     } catch (error) {
-      console.error('Error loading staff:', error);
+      console.error('Error loading data:', error);
     }
   };
 
   const loadAvailableSlots = async (date: Date, serviceId: string) => {
     try {
       setIsLoading(true);
-      const slots = await appointmentsApi.getAvailableSlots(
-        mockBusiness.id,
+
+      // Find staff who can provide this service
+      const serviceStaff = staff.filter(s => {
+        // All active staff can provide services (simplified)
+        return s.isActive;
+      });
+
+      if (serviceStaff.length === 0) {
+        setAvailableSlots([]);
+        return;
+      }
+
+      // Use the first available staff member for simplicity
+      // In production, you'd fetch slots for all staff and combine them
+      const staffMember = serviceStaff[0];
+      setSelectedStaffId(staffMember.id);
+
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams({
         serviceId,
-        date
+        staffId: staffMember.id,
+        date: date.toISOString().split('T')[0]
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/appointments/available-slots?${params.toString()}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        }
       );
-      setAvailableSlots(slots);
+
+      if (response.ok) {
+        const slots = await response.json();
+        setAvailableSlots(slots);
+      }
     } catch (error) {
       console.error('Error loading slots:', error);
     } finally {
@@ -72,38 +132,52 @@ export const ClientBooking: React.FC = () => {
     }
   };
 
-  const handleSlotSelect = (slot: TimeSlot) => {
-    setSelectedSlot(slot);
+  const handleSlotSelect = (timeSlot: string) => {
+    setSelectedTime(timeSlot);
     setStep('info');
   };
 
   const handleBooking = async () => {
-    if (!selectedService || !selectedSlot || !selectedDate) return;
+    if (!selectedService || !selectedTime || !selectedDate || !selectedStaffId) return;
 
     try {
       setIsLoading(true);
 
-      // Create client
-      const client = await clientsApi.createClient({
-        name: clientInfo.name,
-        email: clientInfo.email,
-        phone: clientInfo.phone,
-        notes: clientInfo.notes,
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+
+      // Parse the selected time
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const startTime = new Date(selectedDate);
+      startTime.setHours(hours, minutes, 0, 0);
+
+      const endTime = new Date(startTime);
+      endTime.setMinutes(endTime.getMinutes() + selectedService.duration);
+
+      // Create appointment with client info
+      const response = await fetch(`${API_BASE_URL}/appointments`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          serviceId: selectedService.id,
+          staffId: selectedStaffId,
+          clientName: clientInfo.name,
+          clientEmail: clientInfo.email,
+          clientPhone: clientInfo.phone,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          notes: clientInfo.notes || ''
+        })
       });
 
-      // Create appointment
-      await appointmentsApi.createAppointment({
-        businessId: mockBusiness.id,
-        serviceId: selectedService.id,
-        staffId: selectedSlot.staffId!,
-        clientId: client.id,
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime,
-        status: 'confirmed',
-        notes: clientInfo.notes,
-      });
-
-      setIsBookingComplete(true);
+      if (response.ok) {
+        setIsBookingComplete(true);
+      } else {
+        throw new Error('Failed to create appointment');
+      }
     } catch (error) {
       console.error('Error creating appointment:', error);
       alert('Failed to book appointment. Please try again.');
@@ -123,17 +197,12 @@ export const ClientBooking: React.FC = () => {
     return days;
   };
 
-  const groupSlotsByStaff = () => {
-    const grouped: { [staffId: string]: TimeSlot[] } = {};
-    availableSlots.filter(s => s.isAvailable).forEach(slot => {
-      if (slot.staffId) {
-        if (!grouped[slot.staffId]) {
-          grouped[slot.staffId] = [];
-        }
-        grouped[slot.staffId].push(slot);
-      }
-    });
-    return grouped;
+  const convertTimeStringToDate = (timeStr: string) => {
+    if (!selectedDate) return new Date();
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date(selectedDate);
+    date.setHours(hours, minutes, 0, 0);
+    return date;
   };
 
   if (isBookingComplete) {
@@ -155,7 +224,7 @@ export const ClientBooking: React.FC = () => {
             <p className="text-sm text-gray-600 mb-1">Date & Time</p>
             <p className="font-medium text-gray-900">
               {selectedDate && formatDate(selectedDate)}<br />
-              {selectedSlot && formatTime(selectedSlot.startTime)}
+              {selectedTime}
             </p>
           </div>
           <button
@@ -174,7 +243,7 @@ export const ClientBooking: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-semibold text-gray-900">{mockBusiness.name}</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">{businessName || 'Appointment Booking'}</h1>
           <p className="text-gray-600 mt-1">Book an appointment</p>
         </div>
       </div>
@@ -296,27 +365,21 @@ export const ClientBooking: React.FC = () => {
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Available times</h3>
                   {isLoading ? (
                     <div className="text-center py-8 text-gray-500">Loading available slots...</div>
+                  ) : availableSlots.length > 0 ? (
+                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                      {availableSlots.map((timeSlot, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSlotSelect(timeSlot)}
+                          className="px-3 py-2 text-sm border border-gray-200 rounded hover:border-google-blue hover:bg-blue-50 transition-all"
+                        >
+                          {timeSlot}
+                        </button>
+                      ))}
+                    </div>
                   ) : (
-                    <div>
-                      {Object.entries(groupSlotsByStaff()).map(([staffId, slots]) => {
-                        const staffMember = staff.find(s => s.id === staffId);
-                        return (
-                          <div key={staffId} className="mb-4">
-                            <p className="text-sm text-gray-600 mb-2">{staffMember?.name}</p>
-                            <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                              {slots.slice(0, 12).map((slot, index) => (
-                                <button
-                                  key={index}
-                                  onClick={() => handleSlotSelect(slot)}
-                                  className="px-3 py-2 text-sm border border-gray-200 rounded hover:border-google-blue hover:bg-blue-50 transition-all"
-                                >
-                                  {formatTime(slot.startTime)}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="text-center py-8 text-gray-500">
+                      No available slots for this date. Please select another date.
                     </div>
                   )}
                 </div>
@@ -412,7 +475,7 @@ export const ClientBooking: React.FC = () => {
                   {selectedDate && formatDate(selectedDate)}
                 </p>
                 <p className="text-sm text-gray-600">
-                  {selectedSlot && `${formatTime(selectedSlot.startTime)} - ${formatTime(selectedSlot.endTime)}`}
+                  {selectedTime && selectedService && `${selectedTime} (${selectedService.duration} min)`}
                 </p>
               </div>
               <div>

@@ -1,40 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Calendar } from '../components/calendar/Calendar';
-import { CalendarEvent, Appointment } from '../types';
+import { CalendarEvent, Appointment, Business } from '../types';
 import { appointmentsApi, businessApi } from '../services/api';
-import { mockBusiness } from '../services/mockData';
+import { useAuth } from '../contexts/AuthContext';
 
 export const BusinessDashboard: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [businessData, setBusinessData] = useState<Business | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const { business, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    loadAppointments();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [businessInfo, appointmentsData] = await Promise.all([
+        businessApi.getBusiness(),
+        loadAppointments(),
+      ]);
+      setBusinessData(businessInfo);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loadAppointments = async () => {
     try {
-      setIsLoading(true);
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + 60);
 
-      const data = await appointmentsApi.getAppointments(
-        mockBusiness.id,
-        startDate,
-        endDate
-      );
+      const data = await appointmentsApi.getAppointments(startDate, endDate);
       setAppointments(data);
+      return data;
     } catch (error) {
       console.error('Error loading appointments:', error);
-    } finally {
-      setIsLoading(false);
+      return [];
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   const handleEventClick = (event: CalendarEvent) => {
@@ -82,16 +100,15 @@ export const BusinessDashboard: React.FC = () => {
   };
 
   const getClientName = (appointment: Appointment) => {
-    // In a real app, you'd fetch client data
-    return `Client ${appointment.clientId.split('-')[1]}`;
+    return appointment.client?.name || 'Unknown Client';
   };
 
   const getStaffName = (staffId: string) => {
-    const staff = mockBusiness.staff.find(s => s.id === staffId);
+    const staff = businessData?.staff.find(s => s.id === staffId);
     return staff?.name || 'Unknown';
   };
 
-  if (isLoading) {
+  if (isLoading || !businessData) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-gray-600">Loading...</div>
@@ -106,7 +123,7 @@ export const BusinessDashboard: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-gray-900">
-              {mockBusiness.name}
+              {businessData.name}
             </h1>
             <span className="text-gray-400">|</span>
             <span className="text-sm text-gray-600">Business Dashboard</span>
@@ -119,8 +136,11 @@ export const BusinessDashboard: React.FC = () => {
             >
               Settings
             </Link>
-            <button className="px-4 py-2 text-sm font-medium text-white bg-google-blue rounded hover:bg-blue-600 transition-colors">
-              + New Appointment
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+            >
+              Logout
             </button>
           </div>
         </div>
@@ -130,7 +150,7 @@ export const BusinessDashboard: React.FC = () => {
       <div className="flex-1 overflow-hidden">
         <Calendar
           appointments={appointments}
-          services={mockBusiness.services}
+          services={businessData.services}
           onEventClick={handleEventClick}
         />
       </div>
@@ -262,7 +282,7 @@ export const BusinessDashboard: React.FC = () => {
                   <select
                     value={editingAppointment.serviceId}
                     onChange={e => {
-                      const service = mockBusiness.services.find(s => s.id === e.target.value);
+                      const service = businessData.services.find(s => s.id === e.target.value);
                       if (service) {
                         const endTime = new Date(editingAppointment.startTime);
                         endTime.setMinutes(endTime.getMinutes() + service.duration);
@@ -275,7 +295,7 @@ export const BusinessDashboard: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
-                    {mockBusiness.services.map(service => (
+                    {businessData.services.map(service => (
                       <option key={service.id} value={service.id}>
                         {service.name} ({service.duration} min - ${service.price})
                       </option>
@@ -290,7 +310,7 @@ export const BusinessDashboard: React.FC = () => {
                     onChange={e => setEditingAppointment({ ...editingAppointment, staffId: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
-                    {mockBusiness.staff.filter(s => s.isActive).map(staff => (
+                    {businessData.staff.filter(s => s.isActive).map(staff => (
                       <option key={staff.id} value={staff.id}>
                         {staff.name}
                       </option>
@@ -310,7 +330,7 @@ export const BusinessDashboard: React.FC = () => {
                       const currentStart = new Date(editingAppointment.startTime);
                       newDate.setHours(currentStart.getHours(), currentStart.getMinutes());
 
-                      const service = mockBusiness.services.find(s => s.id === editingAppointment.serviceId);
+                      const service = businessData.services.find(s => s.id === editingAppointment.serviceId);
                       const endTime = new Date(newDate);
                       if (service) {
                         endTime.setMinutes(endTime.getMinutes() + service.duration);
@@ -336,7 +356,7 @@ export const BusinessDashboard: React.FC = () => {
                       const newStart = new Date(editingAppointment.startTime);
                       newStart.setHours(hours, minutes);
 
-                      const service = mockBusiness.services.find(s => s.id === editingAppointment.serviceId);
+                      const service = businessData.services.find(s => s.id === editingAppointment.serviceId);
                       const endTime = new Date(newStart);
                       if (service) {
                         endTime.setMinutes(endTime.getMinutes() + service.duration);

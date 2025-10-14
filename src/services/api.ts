@@ -1,204 +1,231 @@
 import { Business, Appointment, Service, StaffMember, Client, TimeSlot } from '../types';
-import { mockBusiness, mockAppointments, mockClients } from './mockData';
-
-// Simulated delay for API calls
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+import { apiRequest } from '../config/api';
 
 // Business API
 export const businessApi = {
-  getBusiness: async (id: string): Promise<Business> => {
-    await delay(300);
-    return mockBusiness;
+  getBusiness: async (): Promise<Business> => {
+    return apiRequest<Business>('/business');
   },
 
-  updateBusiness: async (id: string, data: Partial<Business>): Promise<Business> => {
-    await delay(500);
-    return { ...mockBusiness, ...data };
+  updateBusiness: async (data: Partial<Business>): Promise<Business> => {
+    return apiRequest<Business>('/business', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateBusinessHours: async (hours: any[]): Promise<any> => {
+    return apiRequest('/business/hours', {
+      method: 'PUT',
+      body: JSON.stringify({ hours }),
+    });
   },
 };
 
 // Services API
 export const servicesApi = {
-  getServices: async (businessId: string): Promise<Service[]> => {
-    await delay(300);
-    return mockBusiness.services;
+  getServices: async (): Promise<Service[]> => {
+    return apiRequest<Service[]>('/services');
   },
 
-  createService: async (businessId: string, service: Omit<Service, 'id'>): Promise<Service> => {
-    await delay(500);
-    const newService = { ...service, id: `service-${Date.now()}` };
-    return newService;
+  createService: async (service: Omit<Service, 'id'>): Promise<Service> => {
+    return apiRequest<Service>('/services', {
+      method: 'POST',
+      body: JSON.stringify(service),
+    });
   },
 
   updateService: async (serviceId: string, data: Partial<Service>): Promise<Service> => {
-    await delay(500);
-    const service = mockBusiness.services.find(s => s.id === serviceId);
-    if (!service) throw new Error('Service not found');
-    return { ...service, ...data };
+    return apiRequest<Service>(`/services/${serviceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
   deleteService: async (serviceId: string): Promise<void> => {
-    await delay(500);
+    return apiRequest<void>(`/services/${serviceId}`, {
+      method: 'DELETE',
+    });
   },
 };
 
 // Staff API
 export const staffApi = {
-  getStaff: async (businessId: string): Promise<StaffMember[]> => {
-    await delay(300);
-    return mockBusiness.staff;
+  getStaff: async (): Promise<StaffMember[]> => {
+    return apiRequest<StaffMember[]>('/staff');
   },
 
-  createStaffMember: async (businessId: string, staff: Omit<StaffMember, 'id'>): Promise<StaffMember> => {
-    await delay(500);
-    const newStaff = { ...staff, id: `staff-${Date.now()}` };
-    return newStaff;
+  createStaffMember: async (staff: Omit<StaffMember, 'id'>): Promise<StaffMember> => {
+    return apiRequest<StaffMember>('/staff', {
+      method: 'POST',
+      body: JSON.stringify(staff),
+    });
   },
 
   updateStaffMember: async (staffId: string, data: Partial<StaffMember>): Promise<StaffMember> => {
-    await delay(500);
-    const staff = mockBusiness.staff.find(s => s.id === staffId);
-    if (!staff) throw new Error('Staff member not found');
-    return { ...staff, ...data };
+    return apiRequest<StaffMember>(`/staff/${staffId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
   deleteStaffMember: async (staffId: string): Promise<void> => {
-    await delay(500);
+    return apiRequest<void>(`/staff/${staffId}`, {
+      method: 'DELETE',
+    });
   },
 };
 
 // Appointments API
 export const appointmentsApi = {
   getAppointments: async (
-    businessId: string,
-    startDate: Date,
-    endDate: Date
+    startDate?: Date,
+    endDate?: Date
   ): Promise<Appointment[]> => {
-    await delay(300);
-    return mockAppointments.filter(
-      apt => apt.startTime >= startDate && apt.startTime <= endDate
-    );
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate.toISOString());
+    if (endDate) params.append('endDate', endDate.toISOString());
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const appointments = await apiRequest<any[]>(`/appointments${query}`);
+
+    // Convert date strings to Date objects
+    return appointments.map(apt => ({
+      ...apt,
+      startTime: new Date(apt.startTime),
+      endTime: new Date(apt.endTime),
+      createdAt: new Date(apt.createdAt),
+      updatedAt: new Date(apt.updatedAt),
+    }));
   },
 
   getAppointment: async (appointmentId: string): Promise<Appointment> => {
-    await delay(300);
-    const appointment = mockAppointments.find(a => a.id === appointmentId);
-    if (!appointment) throw new Error('Appointment not found');
-    return appointment;
+    const appointment = await apiRequest<any>(`/appointments/${appointmentId}`);
+    return {
+      ...appointment,
+      startTime: new Date(appointment.startTime),
+      endTime: new Date(appointment.endTime),
+      createdAt: new Date(appointment.createdAt),
+      updatedAt: new Date(appointment.updatedAt),
+    };
   },
 
-  createAppointment: async (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>): Promise<Appointment> => {
-    await delay(500);
-    const newAppointment: Appointment = {
-      ...appointment,
-      id: `appointment-${Date.now()}`,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+  createAppointment: async (appointment: {
+    serviceId: string;
+    staffId: string;
+    clientId?: string;
+    clientName?: string;
+    clientEmail?: string;
+    clientPhone?: string;
+    startTime: Date;
+    endTime: Date;
+    notes?: string;
+  }): Promise<Appointment> => {
+    const created = await apiRequest<any>('/appointments', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...appointment,
+        startTime: appointment.startTime.toISOString(),
+        endTime: appointment.endTime.toISOString(),
+      }),
+    });
+
+    return {
+      ...created,
+      startTime: new Date(created.startTime),
+      endTime: new Date(created.endTime),
+      createdAt: new Date(created.createdAt),
+      updatedAt: new Date(created.updatedAt),
     };
-    return newAppointment;
   },
 
   updateAppointment: async (appointmentId: string, data: Partial<Appointment>): Promise<Appointment> => {
-    await delay(500);
-    const appointment = mockAppointments.find(a => a.id === appointmentId);
-    if (!appointment) throw new Error('Appointment not found');
-    return { ...appointment, ...data, updatedAt: new Date() };
+    const updateData: any = { ...data };
+    if (data.startTime) updateData.startTime = data.startTime.toISOString();
+    if (data.endTime) updateData.endTime = data.endTime.toISOString();
+
+    const updated = await apiRequest<any>(`/appointments/${appointmentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+
+    return {
+      ...updated,
+      startTime: new Date(updated.startTime),
+      endTime: new Date(updated.endTime),
+      createdAt: new Date(updated.createdAt),
+      updatedAt: new Date(updated.updatedAt),
+    };
   },
 
   cancelAppointment: async (appointmentId: string): Promise<Appointment> => {
-    await delay(500);
-    const appointment = mockAppointments.find(a => a.id === appointmentId);
-    if (!appointment) throw new Error('Appointment not found');
-    return { ...appointment, status: 'cancelled', updatedAt: new Date() };
+    const cancelled = await apiRequest<any>(`/appointments/${appointmentId}`, {
+      method: 'DELETE',
+    });
+
+    return {
+      ...cancelled,
+      startTime: new Date(cancelled.startTime),
+      endTime: new Date(cancelled.endTime),
+      createdAt: new Date(cancelled.createdAt),
+      updatedAt: new Date(cancelled.updatedAt),
+    };
   },
 
   getAvailableSlots: async (
-    businessId: string,
     serviceId: string,
-    date: Date,
-    staffId?: string
-  ): Promise<TimeSlot[]> => {
-    await delay(300);
-
-    const service = mockBusiness.services.find(s => s.id === serviceId);
-    if (!service) return [];
-
-    const staffMembers = staffId
-      ? mockBusiness.staff.filter(s => s.id === staffId)
-      : mockBusiness.staff.filter(s => service.staffIds.includes(s.id));
-
-    const dayOfWeek = date.getDay();
-    const slots: TimeSlot[] = [];
-
-    staffMembers.forEach(staff => {
-      const availability = staff.availability.find(a => a.dayOfWeek === dayOfWeek);
-      if (!availability) return;
-
-      const [startHour, startMinute] = availability.startTime.split(':').map(Number);
-      const [endHour, endMinute] = availability.endTime.split(':').map(Number);
-
-      let currentTime = new Date(date);
-      currentTime.setHours(startHour, startMinute, 0, 0);
-
-      const endTime = new Date(date);
-      endTime.setHours(endHour, endMinute, 0, 0);
-
-      while (currentTime < endTime) {
-        const slotEnd = new Date(currentTime);
-        slotEnd.setMinutes(slotEnd.getMinutes() + service.duration);
-
-        if (slotEnd <= endTime) {
-          const isBooked = mockAppointments.some(
-            apt =>
-              apt.staffId === staff.id &&
-              apt.startTime <= currentTime &&
-              apt.endTime > currentTime
-          );
-
-          slots.push({
-            startTime: new Date(currentTime),
-            endTime: slotEnd,
-            isAvailable: !isBooked,
-            staffId: staff.id,
-          });
-        }
-
-        currentTime.setMinutes(currentTime.getMinutes() + mockBusiness.settings.slotDuration);
-      }
+    staffId: string,
+    date: Date
+  ): Promise<string[]> => {
+    const params = new URLSearchParams({
+      serviceId,
+      staffId,
+      date: date.toISOString().split('T')[0], // YYYY-MM-DD format
     });
 
-    return slots;
+    return apiRequest<string[]>(`/appointments/available-slots?${params.toString()}`);
   },
 };
 
 // Clients API
 export const clientsApi = {
-  getClients: async (businessId: string): Promise<Client[]> => {
-    await delay(300);
-    return mockClients;
+  getClients: async (): Promise<Client[]> => {
+    const clients = await apiRequest<any[]>('/clients');
+    return clients.map(client => ({
+      ...client,
+      createdAt: new Date(client.createdAt),
+    }));
   },
 
   getClient: async (clientId: string): Promise<Client> => {
-    await delay(300);
-    const client = mockClients.find(c => c.id === clientId);
-    if (!client) throw new Error('Client not found');
-    return client;
+    const client = await apiRequest<any>(`/clients/${clientId}`);
+    return {
+      ...client,
+      createdAt: new Date(client.createdAt),
+    };
   },
 
   createClient: async (client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
-    await delay(500);
-    const newClient: Client = {
-      ...client,
-      id: `client-${Date.now()}`,
-      createdAt: new Date(),
+    const created = await apiRequest<any>('/clients', {
+      method: 'POST',
+      body: JSON.stringify(client),
+    });
+
+    return {
+      ...created,
+      createdAt: new Date(created.createdAt),
     };
-    return newClient;
   },
 
   updateClient: async (clientId: string, data: Partial<Client>): Promise<Client> => {
-    await delay(500);
-    const client = mockClients.find(c => c.id === clientId);
-    if (!client) throw new Error('Client not found');
-    return { ...client, ...data };
+    const updated = await apiRequest<any>(`/clients/${clientId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+
+    return {
+      ...updated,
+      createdAt: new Date(updated.createdAt),
+    };
   },
 };
